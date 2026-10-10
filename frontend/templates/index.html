@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard | Attendance Pulse{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title">
+    <h2>Operations Dashboard</h2>
+    <p>Live status, quick punch actions, and attendance overview</p>
+  </div>
+  <div class="page-actions">
+    <button class="btn btn-success" onclick="openModal('modal-punch-in')">
+      <span>⚡</span> Punch In
+    </button>
+    <button class="btn btn-primary" onclick="openModal('modal-punch-out')">
+      <span>👋</span> Punch Out
+    </button>
+  </div>
+</div>
+
+<!-- Stats Grid -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-icon indigo">👥</div>
+    <div class="stat-data">
+      <h4>Total Employees</h4>
+      <div class="val">{{ employees_count }}</div>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-icon emerald">🚀</div>
+    <div class="stat-data">
+      <h4>API Backend</h4>
+      <div class="val" style="font-size: 1.25rem;">
+        {% if backend_online %}
+          <span style="color: var(--accent-emerald);">MongoDB Online</span>
+        {% else %}
+          <span style="color: var(--accent-rose);">Offline / 503</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-icon amber">⏱️</div>
+    <div class="stat-data">
+      <h4>Grace Period (R2)</h4>
+      <div class="val">10 Mins</div>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-icon cyan">📊</div>
+    <div class="stat-data">
+      <h4>OT Threshold (R3)</h4>
+      <div class="val">30 Mins</div>
+    </div>
+  </div>
+</div>
+
+<!-- Main Row: Recent Activity & Quick Reference -->
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; align-items: start;">
+  
+  <!-- Recent Attendance Table -->
+  <div class="card">
+    <div class="card-header">
+      <h3><span>📋</span> Recent Attendance Activity</h3>
+      <a href="/attendance" class="btn btn-outline btn-sm">View All Logs &rarr;</a>
+    </div>
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Punch In (IST)</th>
+            <th>Punch Out (IST)</th>
+            <th>Hours</th>
+            <th>Late</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if recent_logs %}
+            {% for log in recent_logs %}
+            <tr>
+              <td><strong style="color: var(--accent-cyan);">{{ log.emp_code }}</strong></td>
+              <td>{{ log.date }}</td>
+              <td>
+                <span class="badge badge-{{ log.status|lower|replace('_', '-') }}">
+                  {{ log.status }}
+                </span>
+                {% if log.half_day %}
+                  <span class="badge badge-half-day">HALF-DAY</span>
+                {% endif %}
+              </td>
+              <td>
+                <script>document.write(formatEpochMs({{ log.punch_in or 'null' }}).split(' ')[1] || '-');</script>
+              </td>
+              <td>
+                <script>document.write(formatEpochMs({{ log.punch_out or 'null' }}).split(' ')[1] || '-');</script>
+              </td>
+              <td>{{ log.work_hours if log.work_hours is not none else '-' }}</td>
+              <td>
+                {% if log.late_minutes and log.late_minutes > 0 %}
+                  <span style="color: var(--accent-amber); font-weight: 700;">+{{ log.late_minutes }}m</span>
+                {% else %}
+                  <span style="color: var(--text-dim);">0</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">
+                No attendance logs found or database is empty.
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Business Rules Card -->
+  <div class="card">
+    <div class="card-header">
+      <h3><span>📘</span> Business Rules Active</h3>
+    </div>
+    <div class="card-body" style="font-size: 0.85rem; line-height: 1.6; color: var(--text-muted);">
+      <div style="margin-bottom: 0.75rem;">
+        <strong style="color: var(--text-main);">R1 Overnight Shifts:</strong><br>
+        Shift times and dates in IST. Punches before shift-end belong to yesterday's shift.
+      </div>
+      <div style="margin-bottom: 0.75rem;">
+        <strong style="color: var(--text-main);">R2 Strict Grace Period:</strong><br>
+        $\le 10:00$ is not late. $> 10:00$ calculates floor minutes from shift start.
+      </div>
+      <div style="margin-bottom: 0.75rem;">
+        <strong style="color: var(--text-main);">R3 Overtime:</strong><br>
+        Counted only when $\ge 30$ minutes post shift end.
+      </div>
+      <div style="margin-bottom: 0.75rem;">
+        <strong style="color: var(--text-main);">R4 Work Hours & R5 Half Day:</strong><br>
+        Rounded half-up 2 decimals. Less than 4.50h counts as half-day.
+      </div>
+      <div>
+        <strong style="color: var(--text-main);">R7 Working Days:</strong><br>
+        Monday to Friday; weekends contribute to overtime and late totals.
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

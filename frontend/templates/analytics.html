@@ -1,0 +1,398 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics Hub | Attendance Pulse{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title">
+    <h2>Analytics & Insights Hub</h2>
+    <p>Comprehensive aggregation metrics powered by MongoDB pipelines</p>
+  </div>
+</div>
+
+<!-- Tabs Navigation -->
+<div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-glass); padding-bottom: 0.5rem;">
+  <button class="btn btn-outline" id="tab-btn-monthly" onclick="switchTab('monthly')">👤 Employee Monthly</button>
+  <button class="btn btn-outline" id="tab-btn-departments" onclick="switchTab('departments')">🏢 Department Summary</button>
+  <button class="btn btn-outline" id="tab-btn-leaderboard" onclick="switchTab('leaderboard')">🏆 Late Leaderboard</button>
+  <button class="btn btn-outline" id="tab-btn-trend" onclick="switchTab('trend')">📈 Department Trend</button>
+</div>
+
+<!-- TAB 1: Employee Monthly -->
+<div id="tab-monthly" class="card" style="display: none;">
+  <div class="card-header">
+    <h3><span>👤</span> Monthly Employee Attendance Breakdown</h3>
+  </div>
+  <div class="card-body">
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1.5rem;">
+      <div style="flex: 1; min-width: 180px;">
+        <label class="form-label">Employee Code</label>
+        <input type="text" id="monthly-emp-code" class="form-control" value="EMP0001" placeholder="e.g. EMP0001">
+      </div>
+      <div style="flex: 1; min-width: 180px;">
+        <label class="form-label">Month (YYYY-MM)</label>
+        <input type="month" id="monthly-month" class="form-control" value="2026-07">
+      </div>
+      <button class="btn btn-primary" onclick="loadMonthlyAnalytics()">Query Monthly Stats</button>
+    </div>
+
+    <div id="monthly-results" style="display: none;">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon emerald">🎯</div>
+          <div class="stat-data">
+            <h4>Attendance Pct</h4>
+            <div class="val" id="res-m-pct">0%</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon indigo">📅</div>
+          <div class="stat-data">
+            <h4>Working Days (R7)</h4>
+            <div class="val" id="res-m-working">0</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon cyan">✅</div>
+          <div class="stat-data">
+            <h4>Present Days</h4>
+            <div class="val" id="res-m-present">0</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon amber">⏱️</div>
+          <div class="stat-data">
+            <h4>Late Mins (Count)</h4>
+            <div class="val" id="res-m-late">0m (0)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 2: Department Summary -->
+<div id="tab-departments" class="card" style="display: none;">
+  <div class="card-header">
+    <h3><span>🏢</span> Department Monthly Summary</h3>
+  </div>
+  <div class="card-body">
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1.5rem;">
+      <div style="flex: 1; min-width: 180px;">
+        <label class="form-label">Month (YYYY-MM)</label>
+        <input type="month" id="dept-month" class="form-control" value="2026-07">
+      </div>
+      <div style="flex: 1; min-width: 180px;">
+        <label class="form-label">Department Filter (Optional)</label>
+        <input type="text" id="dept-name" class="form-control" placeholder="All Departments">
+      </div>
+      <button class="btn btn-primary" onclick="loadDepartmentSummary()">Query Summary</button>
+    </div>
+
+    <div id="dept-results" class="table-responsive"></div>
+  </div>
+</div>
+
+<!-- TAB 3: Late Leaderboard -->
+<div id="tab-leaderboard" class="card" style="display: none;">
+  <div class="card-header">
+    <h3><span>🏆</span> Late-Comers Leaderboard (Competition Ranking)</h3>
+  </div>
+  <div class="card-body">
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1.5rem;">
+      <div style="flex: 1; min-width: 160px;">
+        <label class="form-label">Month (YYYY-MM)</label>
+        <input type="month" id="lead-month" class="form-control" value="2026-07">
+      </div>
+      <div style="flex: 1; min-width: 140px;">
+        <label class="form-label">Limit (1-50)</label>
+        <input type="number" id="lead-limit" class="form-control" value="10" min="1" max="50">
+      </div>
+      <div style="flex: 1; min-width: 160px;">
+        <label class="form-label">Department (Optional)</label>
+        <input type="text" id="lead-dept" class="form-control" placeholder="All">
+      </div>
+      <button class="btn btn-primary" onclick="loadLeaderboard()">Query Leaderboard</button>
+    </div>
+
+    <div id="lead-results" class="table-responsive"></div>
+  </div>
+</div>
+
+<!-- TAB 4: Department Trend -->
+<div id="tab-trend" class="card" style="display: none;">
+  <div class="card-header">
+    <h3><span>📈</span> Daily Attendance Trend with 7-Day Moving Average</h3>
+  </div>
+  <div class="card-body">
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1.5rem;">
+      <div style="flex: 1; min-width: 160px;">
+        <label class="form-label">Department *</label>
+        <input type="text" id="trend-dept" class="form-control" value="Engineering" placeholder="e.g. Engineering">
+      </div>
+      <div style="flex: 1; min-width: 140px;">
+        <label class="form-label">From Date (YYYY-MM-DD)</label>
+        <input type="date" id="trend-from" class="form-control" value="2026-07-01">
+      </div>
+      <div style="flex: 1; min-width: 140px;">
+        <label class="form-label">To Date (YYYY-MM-DD)</label>
+        <input type="date" id="trend-to" class="form-control" value="2026-07-31">
+      </div>
+      <button class="btn btn-primary" onclick="loadTrend()">Plot Trend</button>
+    </div>
+
+    <div id="trend-chart-container" style="margin-bottom: 2rem; background: rgba(15,23,42,0.5); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-glass);">
+      <canvas id="trendChart" height="90"></canvas>
+    </div>
+
+    <div id="trend-table-container" class="table-responsive"></div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let trendChartInstance = null;
+
+function switchTab(name) {
+  ["monthly", "departments", "leaderboard", "trend"].forEach(t => {
+    document.getElementById(`tab-${t}`).style.display = t === name ? "block" : "none";
+    const btn = document.getElementById(`tab-btn-${t}`);
+    if (t === name) {
+      btn.classList.add("btn-primary");
+      btn.classList.remove("btn-outline");
+    } else {
+      btn.classList.remove("btn-primary");
+      btn.classList.add("btn-outline");
+    }
+  });
+}
+
+// Auto-select initial tab
+switchTab("monthly");
+
+async function loadMonthlyAnalytics() {
+  const emp = document.getElementById("monthly-emp-code").value.trim();
+  const month = document.getElementById("monthly-month").value;
+  if (!emp || !month) return showToast("Enter employee code and month", "error");
+
+  try {
+    const res = await fetch(`/api/analytics/monthly?emp_code=${emp}&month=${month}`);
+    const data = await res.json();
+    if (!res.ok) return showToast(data.detail || "Error loading monthly analytics", "error");
+
+    document.getElementById("monthly-results").style.display = "block";
+    document.getElementById("res-m-pct").textContent = data.attendance_pct !== null ? `${data.attendance_pct}%` : "N/A";
+    document.getElementById("res-m-working").textContent = data.working_days;
+    document.getElementById("res-m-present").textContent = `${data.present_days} d (Leaves: ${data.leave_days})`;
+    document.getElementById("res-m-late").textContent = `${data.total_late_minutes}m (${data.late_count} times)`;
+    showToast(`Loaded analytics for ${emp} (${month})`, "success");
+  } catch (err) {
+    showToast("Server error", "error");
+  }
+}
+
+async function loadDepartmentSummary() {
+  const month = document.getElementById("dept-month").value;
+  const dept = document.getElementById("dept-name").value.trim();
+  let url = `/api/analytics/departments?month=${month}`;
+  if (dept) url += `&department=${encodeURIComponent(dept)}`;
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!res.ok) return showToast(data.detail || "Error loading department summary", "error");
+
+    let html = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Department</th>
+            <th>Headcount</th>
+            <th>Present Days</th>
+            <th>Avg Work Hours</th>
+            <th>Late Count</th>
+            <th>Total Late Mins</th>
+            <th>Leave Count</th>
+            <th>On Duty</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    if (!data.items || data.items.length === 0) {
+      html += `<tr><td colspan="8" style="text-align: center; padding: 2rem;">No department data found.</td></tr>`;
+    } else {
+      data.items.forEach(d => {
+        html += `
+          <tr>
+            <td><strong style="color: var(--accent-cyan);">${d.department}</strong></td>
+            <td><strong>${d.headcount}</strong></td>
+            <td>${d.present_days}</td>
+            <td>${d.avg_work_hours !== null ? d.avg_work_hours + ' hrs' : '-'}</td>
+            <td>${d.late_count}</td>
+            <td><span style="color: var(--accent-amber); font-weight: 600;">${d.total_late_minutes}m</span></td>
+            <td>${d.leave_count}</td>
+            <td>${d.on_duty_count}</td>
+          </tr>
+        `;
+      });
+    }
+    html += `</tbody></table>`;
+    document.getElementById("dept-results").innerHTML = html;
+    showToast("Department summary loaded", "success");
+  } catch (err) {
+    showToast("Server error", "error");
+  }
+}
+
+async function loadLeaderboard() {
+  const month = document.getElementById("lead-month").value;
+  const limit = document.getElementById("lead-limit").value;
+  const dept = document.getElementById("lead-dept").value.trim();
+  let url = `/api/analytics/leaderboard?month=${month}&limit=${limit}`;
+  if (dept) url += `&department=${encodeURIComponent(dept)}`;
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!res.ok) return showToast(data.detail || "Error loading leaderboard", "error");
+
+    let html = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Employee</th>
+            <th>Name</th>
+            <th>Department</th>
+            <th>Total Late Minutes</th>
+            <th>Late Count</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    if (!data.items || data.items.length === 0) {
+      html += `<tr><td colspan="6" style="text-align: center; padding: 2rem;">No late records for this period.</td></tr>`;
+    } else {
+      data.items.forEach(row => {
+        let medal = "";
+        if (row.rank === 1) medal = "🥇 ";
+        else if (row.rank === 2) medal = "🥈 ";
+        else if (row.rank === 3) medal = "🥉 ";
+
+        html += `
+          <tr>
+            <td><strong>${medal}#${row.rank}</strong></td>
+            <td><strong style="color: var(--accent-cyan); font-family: monospace;">${row.emp_code}</strong></td>
+            <td>${row.name}</td>
+            <td><span class="badge" style="background: rgba(99,102,241,0.15); color: var(--primary);">${row.department}</span></td>
+            <td><strong style="color: var(--accent-rose); font-size: 1rem;">${row.total_late_minutes} mins</strong></td>
+            <td>${row.late_count}</td>
+          </tr>
+        `;
+      });
+    }
+    html += `</tbody></table>`;
+    document.getElementById("lead-results").innerHTML = html;
+    showToast("Leaderboard loaded", "success");
+  } catch (err) {
+    showToast("Server error", "error");
+  }
+}
+
+async function loadTrend() {
+  const dept = document.getElementById("trend-dept").value.trim();
+  const from_d = document.getElementById("trend-from").value;
+  const to_d = document.getElementById("trend-to").value;
+  if (!dept || !from_d || !to_d) return showToast("Enter department, from and to dates", "error");
+
+  try {
+    const res = await fetch(`/api/analytics/trend/${encodeURIComponent(dept)}?from=${from_d}&to=${to_d}`);
+    const data = await res.json();
+    if (!res.ok) return showToast(data.detail || "Error loading trend", "error");
+
+    const labels = data.items.map(i => i.date);
+    const attRates = data.items.map(i => i.attendance_rate !== null ? (i.attendance_rate * 100) : null);
+    const movingAvgs = data.items.map(i => i.moving_avg_7d !== null ? (i.moving_avg_7d * 100) : null);
+
+    // Destroy prior chart
+    if (trendChartInstance) trendChartInstance.destroy();
+
+    const ctx = document.getElementById("trendChart").getContext("2d");
+    trendChartInstance = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "Daily Attendance Rate (%)",
+            data: attRates,
+            borderColor: "#06b6d4",
+            backgroundColor: "rgba(6, 182, 212, 0.1)",
+            tension: 0.2,
+            pointRadius: 3,
+            fill: true,
+          },
+          {
+            label: "7-Day Moving Average (%)",
+            data: movingAvgs,
+            borderColor: "#6366f1",
+            borderDash: [5, 5],
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.3,
+            fill: false,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { labels: { color: "#cbd5e1" } }
+        },
+        scales: {
+          x: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(255,255,255,0.05)" } },
+          y: { min: 0, max: 100, ticks: { color: "#94a3b8" }, grid: { color: "rgba(255,255,255,0.05)" } }
+        }
+      }
+    });
+
+    // Render table
+    let tableHtml = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Working Day</th>
+            <th>Headcount</th>
+            <th>Present Count</th>
+            <th>Late Count</th>
+            <th>Attendance Rate</th>
+            <th>7d Moving Avg</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    data.items.forEach(item => {
+      tableHtml += `
+        <tr>
+          <td><strong>${item.date}</strong></td>
+          <td>${item.is_working_day ? '✅ Yes' : '<span style="color: var(--text-dim);">Weekend</span>'}</td>
+          <td>${item.headcount}</td>
+          <td>${item.present_count}</td>
+          <td>${item.late_count}</td>
+          <td>${item.attendance_rate !== null ? (item.attendance_rate * 100).toFixed(2) + '%' : '-'}</td>
+          <td><strong style="color: var(--primary);">${item.moving_avg_7d !== null ? (item.moving_avg_7d * 100).toFixed(2) + '%' : '-'}</strong></td>
+        </tr>
+      `;
+    });
+    tableHtml += `</tbody></table>`;
+    document.getElementById("trend-table-container").innerHTML = tableHtml;
+    showToast("Trend analysis rendered", "success");
+  } catch (err) {
+    showToast("Server error", "error");
+  }
+}
+</script>
+{% endblock %}

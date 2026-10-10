@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+
+{% block title %}Attendance Logs | Attendance Pulse{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title">
+    <h2>Attendance Logs</h2>
+    <p>Search, filter, inspect, and regularize employee attendance records</p>
+  </div>
+  <div class="page-actions">
+    <button class="btn btn-success" onclick="openModal('modal-punch-in')">
+      <span>⚡</span> Punch In
+    </button>
+    <button class="btn btn-primary" onclick="openModal('modal-punch-out')">
+      <span>👋</span> Punch Out
+    </button>
+  </div>
+</div>
+
+<div class="card">
+  <!-- Filter Bar -->
+  <form method="GET" action="/attendance" class="filter-bar">
+    <input type="text" name="emp_code" class="form-control" placeholder="Employee Code" value="{{ emp_code }}" style="max-width: 160px;">
+    
+    <input type="date" name="date_from" class="form-control" placeholder="From Date" value="{{ date_from }}" style="max-width: 160px;">
+    <input type="date" name="date_to" class="form-control" placeholder="To Date" value="{{ date_to }}" style="max-width: 160px;">
+
+    <select name="status" class="form-select" style="max-width: 160px;">
+      <option value="">All Statuses</option>
+      <option value="PRESENT" {% if status == 'PRESENT' %}selected{% endif %}>PRESENT</option>
+      <option value="WFH" {% if status == 'WFH' %}selected{% endif %}>WFH</option>
+      <option value="ON_DUTY" {% if status == 'ON_DUTY' %}selected{% endif %}>ON_DUTY</option>
+      <option value="ABSENT" {% if status == 'ABSENT' %}selected{% endif %}>ABSENT</option>
+      <option value="LEAVE" {% if status == 'LEAVE' %}selected{% endif %}>LEAVE</option>
+    </select>
+
+    <button type="submit" class="btn btn-outline btn-sm">Filter</button>
+    {% if emp_code or date_from or date_to or status %}
+      <a href="/attendance" class="btn btn-outline btn-sm" style="color: var(--accent-rose);">Reset</a>
+    {% endif %}
+  </form>
+
+  <!-- Table -->
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th>Punch In (IST)</th>
+          <th>Punch Out (IST)</th>
+          <th>Work Hours</th>
+          <th>Late</th>
+          <th>Overtime</th>
+          <th>Audit</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if data['items'] %}
+          {% for log in data['items'] %}
+          <tr>
+            <td>
+              <strong style="color: var(--accent-cyan); font-family: monospace;">{{ log.emp_code }}</strong>
+            </td>
+            <td><strong>{{ log.date }}</strong></td>
+            <td>
+              <span class="badge badge-{{ log.status|lower|replace('_', '-') }}">
+                {{ log.status }}
+              </span>
+              {% if log.half_day %}
+                <span class="badge badge-half-day">HALF-DAY</span>
+              {% endif %}
+            </td>
+            <td>
+              <script>document.write(formatEpochMs({{ log.punch_in or 'null' }}) || '-');</script>
+            </td>
+            <td>
+              <script>document.write(formatEpochMs({{ log.punch_out or 'null' }}) || '-');</script>
+            </td>
+            <td>
+              {% if log.work_hours is not none %}
+                <strong style="color: #fff;">{{ log.work_hours }} hrs</strong>
+              {% else %}
+                <span style="color: var(--text-dim);">-</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if log.late_minutes and log.late_minutes > 0 %}
+                <span style="color: var(--accent-amber); font-weight: 700;">+{{ log.late_minutes }}m</span>
+              {% else %}
+                <span style="color: var(--text-dim);">0</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if log.overtime_minutes and log.overtime_minutes > 0 %}
+                <span style="color: var(--accent-emerald); font-weight: 700;">+{{ log.overtime_minutes }}m</span>
+              {% else %}
+                <span style="color: var(--text-dim);">0</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if log.history and log.history|length > 0 %}
+                <button class="btn btn-outline btn-sm" style="font-size: 0.72rem; padding: 0.2rem 0.5rem;" onclick='viewHistory({{ log|tojson }})'>
+                  📜 {{ log.history|length }} change(s)
+                </button>
+              {% else %}
+                <span style="color: var(--text-dim); font-size: 0.75rem;">None</span>
+              {% endif %}
+            </td>
+            <td>
+              <button class="btn btn-outline btn-sm" onclick='openRegularizeModal({{ log|tojson }})'>
+                ✏️ Correct
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="10" style="text-align: center; color: var(--text-muted); padding: 3rem;">
+              No attendance records found matching filters.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  <div class="pagination">
+    <div>
+      Showing <strong>{{ data['items']|length }}</strong> of <strong>{{ data['total'] }}</strong> logs
+    </div>
+    <div class="page-controls">
+      {% if current_page > 1 %}
+        <a href="?page={{ current_page - 1 }}&emp_code={{ emp_code }}&date_from={{ date_from }}&date_to={{ date_to }}&status={{ status }}" class="btn btn-outline btn-sm">&larr; Previous</a>
+      {% endif %}
+      <span style="padding: 0.35rem 0.75rem; border-radius: var(--radius-sm); background: rgba(255,255,255,0.05);">
+        Page {{ current_page }} of {{ total_pages }}
+      </span>
+      {% if current_page < total_pages %}
+        <a href="?page={{ current_page + 1 }}&emp_code={{ emp_code }}&date_from={{ date_from }}&date_to={{ date_to }}&status={{ status }}" class="btn btn-outline btn-sm">Next &rarr;</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Regularize Attendance -->
+<div id="modal-regularize" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3>✏️ Regularize Attendance</h3>
+      <button class="modal-close" onclick="closeModal('modal-regularize')">&times;</button>
+    </div>
+    <form onsubmit="handleRegularizeSubmit(event)">
+      <div class="modal-body">
+        <input type="hidden" id="reg-emp-code">
+        <input type="hidden" id="reg-date">
+
+        <div style="background: rgba(15,23,42,0.6); padding: 0.75rem 1rem; border-radius: var(--radius-sm); margin-bottom: 1.25rem;">
+          <span style="color: var(--text-muted); font-size: 0.8rem;">Target Record: </span>
+          <strong id="reg-target-display" style="color: var(--accent-cyan);"></strong>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">New Status</label>
+          <select id="reg-status" class="form-select">
+            <option value="PRESENT">PRESENT</option>
+            <option value="WFH">WFH</option>
+            <option value="ON_DUTY">ON_DUTY</option>
+            <option value="ABSENT">ABSENT</option>
+            <option value="LEAVE">LEAVE</option>
+          </select>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="form-group">
+            <label class="form-label">Punch In (Optional Update)</label>
+            <input type="datetime-local" id="reg-punch-in" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Punch Out (Optional Update)</label>
+            <input type="datetime-local" id="reg-punch-out" class="form-control">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Reason for Regularization * (5 - 200 chars)</label>
+          <textarea id="reg-reason" class="form-control" rows="2" required minlength="5" maxlength="200" placeholder="e.g. Missed biometric scan due to network downtime"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Regularized By (Admin / Manager Name) *</label>
+          <input type="text" id="reg-by" class="form-control" required minlength="1" maxlength="50" placeholder="e.g. HR Manager">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modal-regularize')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Apply Regularization</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: History Viewer -->
+<div id="modal-history" class="modal-overlay">
+  <div class="modal-card" style="max-width: 680px;">
+    <div class="modal-header">
+      <h3>📜 Audit History Trail</h3>
+      <button class="modal-close" onclick="closeModal('modal-history')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="history-content"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline" onclick="closeModal('modal-history')">Close</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openRegularizeModal(log) {
+  document.getElementById("reg-emp-code").value = log.emp_code;
+  document.getElementById("reg-date").value = log.date;
+  document.getElementById("reg-target-display").textContent = `${log.emp_code} on ${log.date}`;
+  document.getElementById("reg-status").value = log.status;
+  document.getElementById("reg-punch-in").value = "";
+  document.getElementById("reg-punch-out").value = "";
+  document.getElementById("reg-reason").value = "";
+  document.getElementById("reg-by").value = "";
+  openModal("modal-regularize");
+}
+
+async function handleRegularizeSubmit(e) {
+  e.preventDefault();
+  const emp_code = document.getElementById("reg-emp-code").value;
+  const date = document.getElementById("reg-date").value;
+  const status = document.getElementById("reg-status").value;
+  const punch_in_val = document.getElementById("reg-punch-in").value;
+  const punch_out_val = document.getElementById("reg-punch-out").value;
+  const reason = document.getElementById("reg-reason").value.trim();
+  const regularized_by = document.getElementById("reg-by").value.trim();
+
+  const payload = {
+    status,
+    reason,
+    regularized_by,
+  };
+
+  if (punch_in_val) payload.punch_in = localInputToEpochMs(punch_in_val);
+  if (punch_out_val) payload.punch_out = localInputToEpochMs(punch_out_val);
+
+  try {
+    const res = await fetch(`/api/attendance/regularize/${emp_code}/${date}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(`Record ${emp_code} (${date}) updated successfully!`, "success");
+      closeModal("modal-regularize");
+      setTimeout(() => window.location.reload(), 1000);
+    } else {
+      showToast(data.detail || "Failed to regularize", "error");
+    }
+  } catch (err) {
+    showToast("Network error", "error");
+  }
+}
+
+function viewHistory(log) {
+  const container = document.getElementById("history-content");
+  if (!log.history || log.history.length === 0) {
+    container.innerHTML = "<p style='color: var(--text-muted);'>No audit trail recorded for this log.</p>";
+  } else {
+    let html = `<div style="display: flex; flex-direction: column; gap: 1rem;">`;
+    log.history.forEach((h, idx) => {
+      html += `
+        <div style="background: rgba(15,23,42,0.6); border: 1px solid var(--border-glass); border-radius: var(--radius-sm); padding: 1rem;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+            <strong style="color: var(--accent-cyan);">#${idx + 1} By: ${h.by}</strong>
+            <span style="font-size: 0.78rem; color: var(--text-dim);">${formatEpochMs(h.at)}</span>
+          </div>
+          <div style="font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--text-main);">
+            <em>Reason:</em> "${h.reason}"
+          </div>
+          <pre class="json-view" style="font-size: 0.75rem; max-height: 140px; margin: 0;">${JSON.stringify(h.changes, null, 2)}</pre>
+        </div>
+      `;
+    });
+    html += `</div>`;
+    container.innerHTML = html;
+  }
+  openModal("modal-history");
+}
+</script>
+{% endblock %}

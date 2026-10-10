@@ -1,7 +1,11 @@
-# DECISIONS.md  (about 150-200 words in total - plain language, your own words)
+# DECISIONS.md
 
-1. **Indexes.** Which indexes did you create, and which query or guarantee does each one serve? Which one did you consider and reject?
-2. **Punch-in race.** Two identical punch-in requests arrive at the same instant. Walk through exactly what happens in your code.
-3. **Ties.** Two employees are tied on late minutes at the cutoff of `limit`. What does your leaderboard return, and why?
-4. **Headcount.** How does your department summary make sure employees with zero logs are counted?
-5. **One thing you would change** if this had to serve 100x the data.
+1. **Indexes.** Seven indexes created at startup. `employees.emp_code` unique — enforces business key uniqueness and serves all employee lookups. `employees.(department, emp_code)` — serves the department filter + emp_code sort in list-employees without a separate sort pass. `attendance_logs.(emp_code, date)` unique — the primary attendance identity index; makes punch-in atomically safe via DuplicateKeyError. `attendance_logs.(date DESC, emp_code ASC)` — exactly matches the list-attendance sort order, making all paginated list queries IXSCAN. `attendance_logs.(date, status)` — accelerates date-range + status filter combinations in the list endpoint. `attendance_logs.(emp_code, punch_in)` — allows punch-out to find the most recent open record efficiently. `attendance_logs.(date, late_minutes)` — helps the leaderboard $match stage skip zero-late records. Considered a partial index on `punch_out: null` but rejected as it would need to be rebuilt when punch-out is set, adding write amplification.
+
+2. **Punch-in race.** Both requests pass Pydantic validation and fetch the employee. Both compute the same `att_date`. Both call `insert_one`. MongoDB's unique compound index on `(emp_code, date)` ensures exactly one insert succeeds; the other raises `DuplicateKeyError`, which is caught and returned as 409. No application-level lock or check-then-insert is needed.
+
+3. **Ties.** If two employees have the same `total_late_minutes` and both rank at or below `limit`, both are returned. Standard competition ranking assigns the same rank to tied employees and skips the next rank. The pipeline returns all employees sorted by `total_late_minutes DESC, emp_code ASC`, then Python assigns ranks and filters `rank <= limit`, so all tied employees at the boundary rank are included even if that exceeds `limit` rows.
+
+4. **Headcount.** The department-summary pipeline starts from the `employees` collection (not `attendance_logs`) with a `$lookup` (left-join) for that month's logs. Employees with zero logs simply yield an empty array from the lookup; they still contribute 1 to `headcount` in the `$group` stage.
+
+5. **One change for 100x data.** Replace the per-day correlated `$lookup` inside the trend pipeline (which runs one employees query per day, up to 92 queries) with a single `$lookup` of all relevant employees upfront and compute headcount per day using `$filter` and `$size` in a `$project` stage. At 100x data the department-level headcount subquery is the bottleneck.

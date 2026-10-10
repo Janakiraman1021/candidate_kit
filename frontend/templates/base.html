@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Employee Attendance & Analytics{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <a href="/" class="brand">
+      <div class="brand-icon">⚡</div>
+      <div class="brand-text">
+        <h1>ATTENDANCE PULSE</h1>
+        <p>Enterprise Attendance & Analytics</p>
+      </div>
+    </a>
+
+    <ul class="nav-links">
+      <li class="nav-item {% if active_page == 'dashboard' %}active{% endif %}">
+        <a href="/">Dashboard</a>
+      </li>
+      <li class="nav-item {% if active_page == 'employees' %}active{% endif %}">
+        <a href="/employees">Employees</a>
+      </li>
+      <li class="nav-item {% if active_page == 'attendance' %}active{% endif %}">
+        <a href="/attendance">Attendance Logs</a>
+      </li>
+      <li class="nav-item {% if active_page == 'analytics' %}active{% endif %}">
+        <a href="/analytics">Analytics Hub</a>
+      </li>
+      <li class="nav-item {% if active_page == 'explain' %}active{% endif %}">
+        <a href="/explain">Query Explain</a>
+      </li>
+    </ul>
+
+    <div class="nav-status">
+      <div class="clock-pill">
+        <span>🕒</span>
+        <span id="live-clock">Loading IST...</span>
+      </div>
+      <div class="status-badge {% if backend_online %}online{% else %}offline{% endif %}">
+        <span class="pulse-dot"></span>
+        <span>FastAPI: {% if backend_online %}Connected{% else %}Offline{% endif %}</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Global Modals: Punch In & Punch Out -->
+  <div id="modal-punch-in" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>⚡ Record Punch-In</h3>
+        <button class="modal-close" onclick="closeModal('modal-punch-in')">&times;</button>
+      </div>
+      <form onsubmit="handlePunchIn(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Employee Code *</label>
+            <input type="text" name="emp_code" class="form-control" placeholder="e.g. EMP0001" required pattern="^EMP\d{4,6}$">
+            <small style="color: var(--text-dim); font-size: 0.75rem;">Format: EMP followed by 4-6 digits</small>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Status *</label>
+            <select name="status" class="form-select">
+              <option value="PRESENT" selected>PRESENT (In Office)</option>
+              <option value="WFH">WFH (Work From Home)</option>
+              <option value="ON_DUTY">ON_DUTY (Field / Client visit)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Custom Timestamp (Optional)</label>
+            <input type="datetime-local" name="custom_time" class="form-control">
+            <small style="color: var(--text-dim); font-size: 0.75rem;">Leave empty to use current real-time clock</small>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeModal('modal-punch-in')">Cancel</button>
+          <button type="submit" class="btn btn-success">Confirm Punch-In</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-punch-out" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>👋 Record Punch-Out</h3>
+        <button class="modal-close" onclick="closeModal('modal-punch-out')">&times;</button>
+      </div>
+      <form onsubmit="handlePunchOut(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Employee Code *</label>
+            <input type="text" name="emp_code" class="form-control" placeholder="e.g. EMP0001" required pattern="^EMP\d{4,6}$">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Custom Timestamp (Optional)</label>
+            <input type="datetime-local" name="custom_time" class="form-control">
+            <small style="color: var(--text-dim); font-size: 0.75rem;">Leave empty to use current real-time clock</small>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeModal('modal-punch-out')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Confirm Punch-Out</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

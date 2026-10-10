@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}Employee Directory | Attendance Pulse{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title">
+    <h2>Employee Directory</h2>
+    <p>Manage and inspect registered company personnel</p>
+  </div>
+  <div class="page-actions">
+    <button class="btn btn-primary" onclick="openModal('modal-add-employee')">
+      <span>➕</span> Add Employee
+    </button>
+  </div>
+</div>
+
+<div class="card">
+  <!-- Filter Bar -->
+  <form method="GET" action="/employees" class="filter-bar">
+    <div style="flex: 1; min-width: 220px;">
+      <select name="department" class="form-select" onchange="this.form.submit()">
+        <option value="">All Departments</option>
+        {% for d in departments %}
+          <option value="{{ d }}" {% if department == d %}selected{% endif %}>{{ d }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% if department %}
+      <a href="/employees" class="btn btn-outline btn-sm">Clear Filter</a>
+    {% endif %}
+  </form>
+
+  <!-- Table -->
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Emp Code</th>
+          <th>Full Name</th>
+          <th>Email</th>
+          <th>Department</th>
+          <th>Shift Window</th>
+          <th>Joined On</th>
+          <th>Registered</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if data['items'] %}
+          {% for emp in data['items'] %}
+          <tr>
+            <td>
+              <strong style="color: var(--accent-cyan); font-family: monospace; font-size: 0.95rem;">
+                {{ emp.emp_code }}
+              </strong>
+            </td>
+            <td><strong>{{ emp.name }}</strong></td>
+            <td style="color: var(--text-muted);">{{ emp.email }}</td>
+            <td>
+              <span class="badge" style="background: rgba(99, 102, 241, 0.15); color: var(--primary);">
+                {{ emp.department }}
+              </span>
+            </td>
+            <td>
+              <span style="font-variant-numeric: tabular-nums;">{{ emp.shift_start }} &ndash; {{ emp.shift_end }}</span>
+            </td>
+            <td>{{ emp.joined_on }}</td>
+            <td style="color: var(--text-dim); font-size: 0.8rem;">
+              <script>document.write(formatEpochMs({{ emp.created_at }}));</script>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 3rem;">
+              No employees found matching current filter.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  <div class="pagination">
+    <div>
+      Showing <strong>{{ data['items']|length }}</strong> of <strong>{{ data['total'] }}</strong> employees
+    </div>
+    <div class="page-controls">
+      {% if current_page > 1 %}
+        <a href="?page={{ current_page - 1 }}&department={{ department }}" class="btn btn-outline btn-sm">&larr; Previous</a>
+      {% endif %}
+      <span style="padding: 0.35rem 0.75rem; border-radius: var(--radius-sm); background: rgba(255,255,255,0.05);">
+        Page {{ current_page }} of {{ total_pages }}
+      </span>
+      {% if current_page < total_pages %}
+        <a href="?page={{ current_page + 1 }}&department={{ department }}" class="btn btn-outline btn-sm">Next &rarr;</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add Employee -->
+<div id="modal-add-employee" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3>➕ Create New Employee</h3>
+      <button class="modal-close" onclick="closeModal('modal-add-employee')">&times;</button>
+    </div>
+    <form onsubmit="handleCreateEmployee(event)">
+      <div class="modal-body">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="form-group">
+            <label class="form-label">Employee Code *</label>
+            <input type="text" name="emp_code" class="form-control" placeholder="EMP0001" required pattern="^EMP\d{4,6}$">
+            <small style="color: var(--text-dim); font-size: 0.75rem;">EMP + 4-6 digits</small>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Full Name *</label>
+            <input type="text" name="name" class="form-control" placeholder="Jane Doe" required minlength="1" maxlength="100">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Email Address *</label>
+          <input type="email" name="email" class="form-control" placeholder="jane@example.com" required maxlength="120">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Department *</label>
+          <input type="text" name="department" class="form-control" placeholder="Engineering" required maxlength="50">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="form-group">
+            <label class="form-label">Shift Start (HH:MM) *</label>
+            <input type="text" name="shift_start" class="form-control" value="09:30" required pattern="^([01]\d|2[0-3]):[0-5]\d$">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Shift End (HH:MM) *</label>
+            <input type="text" name="shift_end" class="form-control" value="18:30" required pattern="^([01]\d|2[0-3]):[0-5]\d$">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Joining Date *</label>
+          <input type="date" name="joined_on" class="form-control" required value="2026-01-01">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modal-add-employee')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create Employee</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}Query Explain | Attendance Pulse{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title">
+    <h2>MongoDB Execution Plan Inspector</h2>
+    <p>Analyze query performance, executionStats, and index scans (IXSCAN vs COLLSCAN)</p>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom: 2rem;">
+  <div class="card-header">
+    <h3><span>🔍</span> Select Endpoint Query</h3>
+  </div>
+  <div class="card-body">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+      <div class="form-group">
+        <label class="form-label">Endpoint Target *</label>
+        <select id="exp-endpoint" class="form-select" onchange="updateExplainInputs()">
+          <option value="attendance_list" selected>attendance_list (GET /attendance)</option>
+          <option value="employee_monthly">employee_monthly (GET /analytics/employees/...)</option>
+          <option value="department_summary">department_summary (GET /analytics/departments/summary)</option>
+          <option value="late_leaderboard">late_leaderboard (GET /analytics/leaderboard/late)</option>
+          <option value="department_trend">department_trend (GET /analytics/departments/.../trend)</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="grp-emp">
+        <label class="form-label">Employee Code</label>
+        <input type="text" id="exp-emp" class="form-control" value="EMP0001">
+      </div>
+
+      <div class="form-group" id="grp-month">
+        <label class="form-label">Month (YYYY-MM)</label>
+        <input type="month" id="exp-month" class="form-control" value="2026-07">
+      </div>
+
+      <div class="form-group" id="grp-dept">
+        <label class="form-label">Department</label>
+        <input type="text" id="exp-dept" class="form-control" value="Engineering">
+      </div>
+
+      <div class="form-group" id="grp-from">
+        <label class="form-label">From Date</label>
+        <input type="date" id="exp-from" class="form-control" value="2026-07-01">
+      </div>
+
+      <div class="form-group" id="grp-to">
+        <label class="form-label">To Date</label>
+        <input type="date" id="exp-to" class="form-control" value="2026-07-31">
+      </div>
+    </div>
+
+    <button class="btn btn-primary" onclick="runExplain()">Run MongoDB Explain</button>
+  </div>
+</div>
+
+<div id="explain-results" style="display: none;">
+  <div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+      <h3><span>⚡</span> Execution Summary</h3>
+    </div>
+    <div class="card-body">
+      <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+        <div>
+          <span style="color: var(--text-muted); font-size: 0.8rem;">Target Collection</span>
+          <div id="stat-coll" style="font-size: 1.2rem; font-weight: 700; color: var(--accent-cyan);">-</div>
+        </div>
+        <div>
+          <span style="color: var(--text-muted); font-size: 0.8rem;">Query Stage / Scan Type</span>
+          <div id="stat-stage" style="font-size: 1.2rem; font-weight: 700;">-</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h3><span>📄</span> Raw ExecutionStats JSON Output</h3>
+    </div>
+    <div class="card-body">
+      <pre id="explain-json" class="json-view">Loading...</pre>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateExplainInputs() {
+  const ep = document.getElementById("exp-endpoint").value;
+  // toggle inputs
+  document.getElementById("grp-emp").style.display = (ep === "attendance_list" || ep === "employee_monthly") ? "block" : "none";
+  document.getElementById("grp-month").style.display = (ep === "employee_monthly" || ep === "department_summary" || ep === "late_leaderboard") ? "block" : "none";
+  document.getElementById("grp-dept").style.display = (ep === "department_summary" || ep === "late_leaderboard" || ep === "department_trend") ? "block" : "none";
+  document.getElementById("grp-from").style.display = (ep === "attendance_list" || ep === "department_trend") ? "block" : "none";
+  document.getElementById("grp-to").style.display = (ep === "attendance_list" || ep === "department_trend") ? "block" : "none";
+}
+
+updateExplainInputs();
+
+async function runExplain() {
+  const ep = document.getElementById("exp-endpoint").value;
+  let params = new URLSearchParams();
+
+  if (ep === "attendance_list") {
+    const emp = document.getElementById("exp-emp").value.trim();
+    if (emp) params.append("emp_code", emp);
+  } else if (ep === "employee_monthly") {
+    params.append("emp_code", document.getElementById("exp-emp").value.trim());
+    params.append("month", document.getElementById("exp-month").value);
+  } else if (ep === "department_summary") {
+    params.append("month", document.getElementById("exp-month").value);
+  } else if (ep === "late_leaderboard") {
+    params.append("month", document.getElementById("exp-month").value);
+  } else if (ep === "department_trend") {
+    params.append("department", document.getElementById("exp-dept").value.trim());
+    params.append("from", document.getElementById("exp-from").value);
+    params.append("to", document.getElementById("exp-to").value);
+  }
+
+  try {
+    const res = await fetch(`/api/explain/${ep}?${params.toString()}`);
+    const data = await res.json();
+    if (!res.ok) return showToast(data.detail || "Explain failed", "error");
+
+    document.getElementById("explain-results").style.display = "block";
+    document.getElementById("stat-coll").textContent = data.collection;
+    
+    // Inspect scan type in json
+    const jsonStr = JSON.stringify(data.explain, null, 2);
+    document.getElementById("explain-json").textContent = jsonStr;
+
+    const hasIxScan = jsonStr.includes("IXSCAN");
+    const hasCollScan = jsonStr.includes("COLLSCAN");
+    let stageHtml = "";
+    if (hasIxScan) {
+      stageHtml = `<span style="color: var(--accent-emerald);">IXSCAN (Indexed Scan - Optimal)</span>`;
+    } else if (hasCollScan) {
+      stageHtml = `<span style="color: var(--accent-amber);">COLLSCAN (Collection Scan)</span>`;
+    } else {
+      stageHtml = `<span style="color: var(--accent-cyan);">Aggregation Pipeline</span>`;
+    }
+    document.getElementById("stat-stage").innerHTML = stageHtml;
+
+    showToast("Explain output generated successfully", "success");
+  } catch (err) {
+    showToast("Server error", "error");
+  }
+}
+</script>
+{% endblock %}
